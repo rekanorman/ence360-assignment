@@ -13,19 +13,15 @@
 
 
 /**
- * Perform an HTTP 1.0 query to a given host and page and port number.
- * host is a hostname and page is a path on the remote server. The query
- * will attempt to retrieve content in the given byte range.
- * User is responsible for freeing the memory.
- * 
+ * Attempts to create a new stream socket and connect it to the server with
+ * the given host name and port number. Returns the new socket
+ * file descriptor on success, -1 otherwise.
+ *
  * @param host - The host name e.g. www.canterbury.ac.nz
- * @param page - e.g. /index.html
- * @param range - Byte range e.g. 0-500. NOTE: A server may not respect this
  * @param port - e.g. 80
- * @return Buffer - Pointer to a buffer holding response data from query
- *                  NULL is returned on failure.
+ * @return File descriptor of the new socket, or -1 on failure.
  */
-Buffer* http_query(char *host, char *page, const char *range, int port) {
+int connect_to_server(char* host, int port) {
     // Convert port number to a string
     char port_string[BUF_SIZE];
     snprintf(port_string, BUF_SIZE, "%d", port);
@@ -40,24 +36,40 @@ Buffer* http_query(char *host, char *page, const char *range, int port) {
     int status;
     if ((status = getaddrinfo(host, port_string, &hints, &server_addr)) != 0) {
         printf("getaddrinfo: %s\n", gai_strerror(status));
-        exit(1);
+        return -1;
     }
 
     // Create a stream socket
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1) {
         perror("socket");
-        exit(1);
+        return -1;
     }
 
     // Connect to the server
     if (connect(sock, server_addr->ai_addr, server_addr->ai_addrlen) == -1) {
         perror("connect");
-        exit(1);
+        return -1;
     }
 
     freeaddrinfo(server_addr);
 
+    return sock;
+}
+
+
+/**
+ * Constructs an HTTP GET request for the given page and byte range, and
+ * sends this request via the given socket. Returns 0 on success, -1 on
+ * failure.
+ *
+ * @param sock - File descriptor of the socket to use.
+ * @param host - The host name e.g. www.canterbury.ac.nz
+ * @param page - e.g. /index.html
+ * @param range - Byte range e.g. 0-500.
+ * @return int - 0 on success, -1 on failure.
+ */
+int send_http_request(int sock, char* host, char* page, const char* range) {
     // Construct a GET request
     char request[BUF_SIZE];
 
@@ -67,15 +79,29 @@ Buffer* http_query(char *host, char *page, const char *range, int port) {
     }
 
     snprintf(request, BUF_SIZE,
-            "GET /%s HTTP/1.0\r\nHost: %s\r\n%sUser-Agent: getter\r\n\r\n",
-            page, host, range_string);
+             "GET /%s HTTP/1.0\r\nHost: %s\r\n%sUser-Agent: getter\r\n\r\n",
+             page, host, range_string);
 
     // Write the request to the socket
     if (write(sock, request, strlen(request)) == -1) {
         perror("write");
-        exit(1);
+        return -1;
     }
 
+    return 0;
+}
+
+
+/**
+ * Receives an HTTP response from the given socket, reading data until EOF
+ * is received. On success, returns a pointer to a buffer holding the response
+ * data, otherwise returns NULL.
+ *
+ * @param sock - File descriptor of the socket to receive data from.
+ * @return Buffer - Pointer to a buffer holding response data from query,
+ *                  or NULL on failure.
+ */
+Buffer* receive_response(int sock) {
     // Create a Buffer to hold the response
     Buffer* response = malloc(sizeof(Buffer));
     response->data = (char*)malloc(BUF_SIZE);
@@ -90,7 +116,7 @@ Buffer* http_query(char *host, char *page, const char *range, int port) {
         bytes_read = read(sock, buffer, BUF_SIZE);
         if (bytes_read == -1) {
             perror("read");
-            exit(1);
+            return NULL;
         }
 
         // Check if we have enough space left in response->data
@@ -108,6 +134,33 @@ Buffer* http_query(char *host, char *page, const char *range, int port) {
     printf("%ld\n", response->length);
 
     return response;
+}
+
+
+/**
+ * Perform an HTTP 1.0 query to a given host and page and port number.
+ * host is a hostname and page is a path on the remote server. The query
+ * will attempt to retrieve content in the given byte range.
+ * User is responsible for freeing the memory.
+ * 
+ * @param host - The host name e.g. www.canterbury.ac.nz
+ * @param page - e.g. /index.html
+ * @param range - Byte range e.g. 0-500. NOTE: A server may not respect this
+ * @param port - e.g. 80
+ * @return Buffer - Pointer to a buffer holding response data from query
+ *                  NULL is returned on failure.
+ */
+Buffer* http_query(char *host, char *page, const char *range, int port) {
+    int sock = connect_to_server(host, port);
+    if (sock == -1) {
+        return NULL;
+    }
+
+    if (send_http_request(sock, host, page, range) != 0) {
+        return NULL;
+    }
+
+    return receive_response(sock);
 }
 
 
