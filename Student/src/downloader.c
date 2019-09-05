@@ -51,7 +51,7 @@ void *worker_thread(void *arg) {
     
     while (task) {
         snprintf(range, 1024 * sizeof(char), "%d-%d", task->min_range, 
-        task->max_range);
+                 task->max_range);
     
         task->result = http_url(task->url, range);
 

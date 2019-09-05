@@ -9,16 +9,17 @@
 
 #include "http.h"
 
-#define BUF_SIZE 1024
+#define BUF_SIZE  1024
+#define HTTP_PORT 80
 
 
 /**
  * Attempts to create a new stream socket and connect it to the server with
- * the given host name and port number. Returns the new socket
- * file descriptor on success, -1 otherwise.
+ * the given host name and port number. Returns the new socket file
+ * descriptor on success, -1 otherwise.
  *
  * @param host - The host name e.g. www.canterbury.ac.nz
- * @param port - e.g. 80
+ * @param port - The port number e.g. 80
  * @return File descriptor of the new socket, or -1 on failure.
  */
 int connect_to_server(char* host, int port) {
@@ -35,7 +36,7 @@ int connect_to_server(char* host, int port) {
     struct addrinfo* server_addr;
     int status;
     if ((status = getaddrinfo(host, port_string, &hints, &server_addr)) != 0) {
-        printf("getaddrinfo: %s\n", gai_strerror(status));
+        fprintf(stderr, "getaddrinfo %s: %s\n", host, gai_strerror(status));
         return -1;
     }
 
@@ -63,11 +64,11 @@ int connect_to_server(char* host, int port) {
  * sends this request via the given socket. Returns 0 on success, -1 on
  * failure.
  *
- * @param sock - File descriptor of the socket to use.
+ * @param sock - File descriptor of the socket to send the request through.
  * @param host - The host name e.g. www.canterbury.ac.nz
- * @param page - e.g. /index.html
+ * @param page - The page to request e.g. index.html
  * @param range - Byte range e.g. 0-500.
- * @return int - 0 on success, -1 on failure.
+ * @return 0 on success, -1 on failure.
  */
 int send_http_request(int sock, char* host, char* page, const char* range) {
     // Construct a GET request
@@ -98,8 +99,8 @@ int send_http_request(int sock, char* host, char* page, const char* range) {
  * data, otherwise returns NULL.
  *
  * @param sock - File descriptor of the socket to receive data from.
- * @return Buffer - Pointer to a buffer holding response data from query,
- *                  or NULL on failure.
+ * @return Pointer to a buffer holding the response data from the query,
+ *         or NULL on failure.
  */
 Buffer* receive_response(int sock) {
     // Create a Buffer to hold the response
@@ -108,12 +109,12 @@ Buffer* receive_response(int sock) {
     response->length = 0;
 
     // Receive and write data to the buffer, calling realloc as needed.
-    char buffer[BUF_SIZE];
+    char temp[BUF_SIZE];  // temporary buffer to read data into
     int bytes_read;
     int buffer_size = BUF_SIZE;   // current size of response->data
 
     do {
-        bytes_read = read(sock, buffer, BUF_SIZE);
+        bytes_read = read(sock, temp, BUF_SIZE);
         if (bytes_read == -1) {
             perror("read");
             return NULL;
@@ -123,15 +124,12 @@ Buffer* receive_response(int sock) {
         if (buffer_size - response->length < bytes_read) {
             response->data = (char*)realloc(response->data, buffer_size * 2);
             buffer_size *= 2;
-            printf("%d\n", buffer_size);
         }
 
-        memcpy(&response->data[response->length], buffer, bytes_read);
+        memcpy(&response->data[response->length], temp, bytes_read);
         response->length += bytes_read;
 
     } while (bytes_read > 0);
-
-    printf("%ld\n", response->length);
 
     return response;
 }
@@ -202,7 +200,7 @@ Buffer *http_url(const char *url, const char *range) {
         page[0] = '\0';
 
         ++page;
-        return http_query(host, page, range, 80);
+        return http_query(host, page, range, HTTP_PORT);
     }
     else {
 
@@ -221,9 +219,65 @@ Buffer *http_url(const char *url, const char *range) {
  *              to download the resource
  */
 int get_num_tasks(char *url, int threads) {
-   assert(0 && "not implemented yet!");
-}
+    // Extract the hostname and page from the given url
+    char host[BUF_SIZE];
+    strncpy(host, url, BUF_SIZE);
+    char* page = strstr(host, "/");
 
+    if (!page) {
+        fprintf(stderr, "could not split url into host/page %s\n", url);
+        exit(1);
+    } else {
+        page[0] = 0;
+        page++;
+    }
+
+    // Create a socket and connect to the server
+    int sock = connect_to_server(host, HTTP_PORT);
+    if (sock == -1) {
+        fprintf(stderr, "failed to connect to server\n");
+        exit(1);
+    }
+
+    // Construct and send a HEAD request
+    char request[BUF_SIZE];
+    snprintf(request, BUF_SIZE,
+             "HEAD /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: getter\r\n\r\n",
+             page, host);
+
+    if (write(sock, request, strlen(request)) == -1) {
+        perror("write");
+        exit(1);
+    }
+
+    // Receive the response from the server
+    int max_header_size = 8192;  // 8K is a common HTTP header size limit
+    char response[max_header_size];
+
+    int bytes_read = read(sock, response, max_header_size);
+    if (bytes_read == -1) {
+        perror("read");
+        exit(1);
+    }
+
+    // Extract the content length
+    char* content_length_field = strstr(response, "Content-Length:");
+    if (!content_length_field) {
+        fprintf(stderr, "No Content-Length field in response from: %s\n", url);
+        exit(1);
+    }
+
+    int content_length = atoi(content_length_field + strlen("Content-Length: "));
+    printf("%s\n\n", response);
+    printf("%d\n", content_length);
+
+    // To get the chunk size, divide total length by number of threads
+    // and round up.
+    max_chunk_size = (content_length + threads - 1) / threads;
+    printf("%d\n", max_chunk_size);
+
+    return threads;
+}
 
 int get_max_chunk_size() {
     return max_chunk_size;

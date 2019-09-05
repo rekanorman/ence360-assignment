@@ -18,6 +18,7 @@ void *doSum(void *arg) {
     Queue *queue = (Queue*)arg;
 
     Task *task = (Task*)queue_get(queue);
+
     while (task) {
         sum += task->value;
         free(task);

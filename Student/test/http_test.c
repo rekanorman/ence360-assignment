@@ -41,6 +41,8 @@ int main(int argc, char **argv) {
         char *content = http_get_content(response);
         int header_length = content - response->data;
 
+        printf("header length: %d\n", header_length);
+
         printf("Header:\n%.*s\n\n", header_length - 4, response->data);
         printf("Content:\n%s\n", content);
 
@@ -53,11 +55,11 @@ int main(int argc, char **argv) {
 //        }
 
         // Write data to local file
-        int fd = open("downloaded", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-        int content_length = response->length - header_length;
-        write(fd, content, content_length);
-
-        buffer_free(response);
+//        int fd = open("downloaded", O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+//        int content_length = response->length - header_length;
+//        write(fd, content, content_length);
+//
+//        buffer_free(response);
     }
 
     return 0;

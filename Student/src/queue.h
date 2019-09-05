@@ -34,7 +34,7 @@ void queue_free(Queue *queue);
  * Place an item into the concurrent queue.
  * If no space available then queue will block
  * until a space is available when it will
- * put the item into the queue and immediatly return
+ * put the item into the queue and immediately return
  *  
  * @param queue - Pointer to the queue to add an item to
  * @param item - An item to add to queue. Uses void* to hold an arbitrary
@@ -48,7 +48,7 @@ void queue_put(Queue *queue, void *item);
  * Get an item from the concurrent queue
  * 
  * If there is no item available then queue_get
- * will block until an item becomes avaible when
+ * will block until an item becomes available when
  * it will immediately return that item.
  * 
  * @param queue - Pointer to queue to get item from
