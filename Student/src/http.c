@@ -203,7 +203,6 @@ Buffer *http_url(const char *url, const char *range) {
         return http_query(host, page, range, HTTP_PORT);
     }
     else {
-
         fprintf(stderr, "could not split url into host/page %s\n", url);
         return NULL;
     }
@@ -268,13 +267,10 @@ int get_num_tasks(char *url, int threads) {
     }
 
     int content_length = atoi(content_length_field + strlen("Content-Length: "));
-    printf("%s\n\n", response);
-    printf("%d\n", content_length);
 
     // To get the chunk size, divide total length by number of threads
     // and round up.
     max_chunk_size = (content_length + threads - 1) / threads;
-    printf("%d\n", max_chunk_size);
 
     return threads;
 }

@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dirent.h>
 
 #include "http.h"
 #include "queue.h"
@@ -188,7 +189,34 @@ void wait_task(const char *download_dir, Context *context) {
  * @param tasks - The tasks needed for the multipart download
  */
 void merge_files(char *src, char *dest, int bytes, int tasks) {
-    assert(0 && "not implemented yet!");
+    // Open destination file for writing.
+    FILE* write_file = fopen(dest, "w");
+    if (!write_file) {
+        perror("fopen");
+        exit(1);
+    }
+
+    // Buffer to store data read from files.
+    char buffer[bytes];
+
+    // Iterate over all the partial file names.
+    for (int i = 0; i < tasks; i++) {
+        // Open the file for reading.
+        char filename[FILE_SIZE];
+        snprintf(filename, FILE_SIZE, "%s/%d", src, i * bytes);
+        FILE* read_file = fopen(filename, "r");
+        if (!read_file) {
+            perror("fopen");
+            exit(1);
+        }
+
+        // Read data from file into buffer and write to destination file.
+        int bytes_read = fread(buffer, 1, bytes, read_file);
+        fwrite(buffer, 1, bytes_read, write_file);
+        fclose(read_file);
+    }
+
+    fclose(write_file);
 }
 
 
@@ -199,7 +227,14 @@ void merge_files(char *src, char *dest, int bytes, int tasks) {
  * @param files - The number of chunked files to remove.
  */
 void remove_chunk_files(char *dir, int bytes, int files) {
-   assert(0 && "not implemented yet!");
+    for (int i = 0; i < files; i++) {
+        char filename[FILE_SIZE];
+        snprintf(filename, FILE_SIZE, "%s/%d", dir, i * bytes);
+        if (remove(filename) != 0) {
+            perror("remove");
+            exit(1);
+        }
+    }
 }
 
 
@@ -250,7 +285,16 @@ int main(int argc, char **argv) {
          * Then remove the chunked download files
          * Beware, this is not an efficient method
          */
-        merge_files(download_dir, line, bytes, num_tasks);
+
+        // Get the filename part of the url.
+        char* filename = strstr(line, "/");
+        if (!filename) {
+            fprintf(stderr, "Could not extract filename from url: %s\n", line);
+        } else {
+            filename++;
+        }
+
+        merge_files(download_dir, filename, bytes, num_tasks);
         remove_chunk_files(download_dir, bytes, num_tasks);
     }
    
