@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
 //        int content_length = response->length - header_length;
 //        write(fd, content, content_length);
 //
-//        buffer_free(response);
+        buffer_free(response);
     }
 
     return 0;

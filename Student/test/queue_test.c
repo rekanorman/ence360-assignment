@@ -48,8 +48,6 @@ int main(int argc, char **argv) {
         Task *task = (Task*)malloc(sizeof(Task));
         task->value = i;
 
-
-
         queue_put(queue, task);
         expected += i;
     }

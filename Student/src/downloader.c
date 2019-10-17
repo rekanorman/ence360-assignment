@@ -190,21 +190,25 @@ void wait_task(const char *download_dir, Context *context) {
  */
 void merge_files(char *src, char *dest, int bytes, int tasks) {
     // Open destination file for writing.
-    FILE* write_file = fopen(dest, "w");
+    char write_filename[FILE_SIZE];
+    snprintf(write_filename, FILE_SIZE, "%s/%s", src, dest);
+
+    FILE* write_file = fopen(write_filename, "w");
     if (!write_file) {
         perror("fopen");
         exit(1);
     }
 
     // Buffer to store data read from files.
-    char buffer[bytes];
+    char* buffer = (char*)malloc(bytes);
 
     // Iterate over all the partial file names.
     for (int i = 0; i < tasks; i++) {
         // Open the file for reading.
-        char filename[FILE_SIZE];
-        snprintf(filename, FILE_SIZE, "%s/%d", src, i * bytes);
-        FILE* read_file = fopen(filename, "r");
+        char read_filename[FILE_SIZE];
+        snprintf(read_filename, FILE_SIZE, "%s/%d", src, i * bytes);
+
+        FILE* read_file = fopen(read_filename, "r");
         if (!read_file) {
             perror("fopen");
             exit(1);
@@ -217,6 +221,9 @@ void merge_files(char *src, char *dest, int bytes, int tasks) {
     }
 
     fclose(write_file);
+    free(buffer);
+
+    printf("---Merges files successfully to: %s---\n", write_filename);
 }
 
 
@@ -269,7 +276,7 @@ int main(int argc, char **argv) {
 
         num_tasks = get_num_tasks(line, num_workers);
         bytes = get_max_chunk_size();
-        
+
         for (int i  = 0; i < num_tasks; i ++) {
             ++work;
             queue_put(context->todo, new_task(line, i * bytes, (i+1) * bytes));
@@ -280,21 +287,22 @@ int main(int argc, char **argv) {
             --work;
             wait_task(download_dir, context);
         }
-        
+
+
         /* Merge the files -- simple synchronous method
          * Then remove the chunked download files
          * Beware, this is not an efficient method
          */
 
-        // Get the filename part of the url.
-        char* filename = strstr(line, "/");
-        if (!filename) {
-            fprintf(stderr, "Could not extract filename from url: %s\n", line);
-        } else {
-            filename++;
+        // Replace forward slashes in the url with underscores, to allow it
+        // to be used as a filename
+        for (int i = 0; i < len; i++) {
+            if (line[i] == '/') {
+                line[i] = '_';
+            }
         }
 
-        merge_files(download_dir, filename, bytes, num_tasks);
+        merge_files(download_dir, line, bytes, num_tasks);
         remove_chunk_files(download_dir, bytes, num_tasks);
     }
    

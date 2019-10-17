@@ -67,7 +67,7 @@ int connect_to_server(char* host, int port) {
  * @param sock - File descriptor of the socket to send the request through.
  * @param host - The host name e.g. www.canterbury.ac.nz
  * @param page - The page to request e.g. index.html
- * @param range - Byte range e.g. 0-500.
+ * @param range - Byte range e.g. 0-500 (can be empty string or NULL if no range)
  * @return 0 on success, -1 on failure.
  */
 int send_http_request(int sock, char* host, char* page, const char* range) {
@@ -95,7 +95,7 @@ int send_http_request(int sock, char* host, char* page, const char* range) {
 
 /**
  * Receives an HTTP response from the given socket, reading data until EOF
- * is received. On success, returns a pointer to a buffer holding the response
+ * occurs. On success, returns a pointer to a buffer holding the response
  * data, otherwise returns NULL.
  *
  * @param sock - File descriptor of the socket to receive data from.
@@ -176,8 +176,7 @@ char* http_get_content(Buffer *response) {
 
     if (header_end) {
         return header_end + 4;
-    }
-    else {
+    } else {
         return response->data;
     }
 }
@@ -198,11 +197,9 @@ Buffer *http_url(const char *url, const char *range) {
     
     if (page) {
         page[0] = '\0';
-
         ++page;
         return http_query(host, page, range, HTTP_PORT);
-    }
-    else {
+    } else {
         fprintf(stderr, "could not split url into host/page %s\n", url);
         return NULL;
     }
@@ -250,17 +247,14 @@ int get_num_tasks(char *url, int threads) {
     }
 
     // Receive the response from the server
-    int max_header_size = 8192;  // 8K is a common HTTP header size limit
-    char response[max_header_size];
-
-    int bytes_read = read(sock, response, max_header_size);
-    if (bytes_read == -1) {
-        perror("read");
+    Buffer* response = receive_response(sock);
+    if (!response) {
+        fprintf(stderr, "error receiving response from server\n");
         exit(1);
     }
 
     // Extract the content length
-    char* content_length_field = strstr(response, "Content-Length:");
+    char* content_length_field = strstr(response->data, "Content-Length:");
     if (!content_length_field) {
         fprintf(stderr, "No Content-Length field in response from: %s\n", url);
         exit(1);
@@ -268,10 +262,13 @@ int get_num_tasks(char *url, int threads) {
 
     int content_length = atoi(content_length_field + strlen("Content-Length: "));
 
-    // To get the chunk size, divide total length by number of threads
-    // and round up.
+    buffer_free(response);
+
+    // To get the chunk size, divide total length by number of threads,
+    // rounding up
     max_chunk_size = (content_length + threads - 1) / threads;
 
+    // Assume that the number of tasks used is equal to the number of threads.
     return threads;
 }
 
