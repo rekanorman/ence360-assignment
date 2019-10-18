@@ -32,4 +32,3 @@ http_download: $(HTTP_DOWN_OBJ)
 clean:
 	-rm -f src/*.o test/*.o
 	-rm -f downloader queue_test http_test http_download
-	-rm -f download/*
