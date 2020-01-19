@@ -1,4 +1,2 @@
-# ence360-assignment
-A multi-threaded HTTP downloader.
-
+# Multi-threaded HTTP downloader
 Written for ENCE360 - Operating Systems.
